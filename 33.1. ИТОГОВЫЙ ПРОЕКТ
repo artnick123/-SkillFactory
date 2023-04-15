@@ -1,0 +1,1068 @@
+import time
+import pytest
+from selenium import webdriver
+from faker import Faker
+
+
+@pytest.fixture(autouse=True)
+def browser():
+ driver = webdriver.Chrome(executable_path='chrome.exe')
+
+ yield driver
+ driver.quit()
+    
+    
+    
+    
+import json
+import requests
+
+
+class RegEmail:
+ """ Открываем сайт 1secmail.com, делаем запрос на создание виртуального email для регистрации на
+ https://b2c.passport.rt.ru/."""
+
+ def __init__(self):
+ self.base_url = 'https://www.1secmail.com/api/v1/'
+
+ def get_api_email(self) -> json:
+ """ Получаем случайный адрес электронной почты"""
+ action = {'action': 'genRandomMailbox', 'count': 1}
+ res = requests.get(self.base_url, params=action)
+ status_email = res.status_code
+        try:
+            result_email = res.json()
+        except json.decoder.JSONDecodeError:
+            result_email = res.text
+        return result_email, status_email
+
+    def get_id_letter(self, login: str, domain: str) -> json:
+        """ Проверяем mailbox, получаем mail_id"""
+        action = {'action': 'getMessages', 'login': login, 'domain': domain}
+        res = requests.get(self.base_url, params=action)
+        status_id = res.status_code
+        try:
+            result_id = res.json()
+        except json.decoder.JSONDecodeError:
+            result_id = res.text
+        return result_id, status_id
+
+    def get_reg_code(self, login: str, domain: str, ids: str) -> json:
+        """ Получаем письмо с кодом регистрации от Ростелекома (id=ids) """
+        action = {'action': 'readMessage', 'login': login, 'domain': domain, 'id': ids}
+        res = requests.get(self.base_url, params=action)
+        status_code = res.status_code
+        result_code = ''
+        try:
+            result_code = res.json()
+        except json.decoder.JSONDecodeError:
+            result_code = res.text
+        return result_code, status_code
+        
+        
+        
+        
+        
+        
+        
+import ast
+
+from pages.base import BasePage
+from pages.locators import *
+import time, os
+
+
+class RegPage(BasePage):
+    def __init__(self, driver, timeout=10):
+        super().__init__(driver, timeout)
+        self.first_name = driver.find_element(*RegLocators.REG_FIRSTNAME)
+        self.last_name = driver.find_element(*RegLocators.REG_LASTNAME)
+        self.email = driver.find_element(*RegLocators.REG_ADDRESS)
+        self.password = driver.find_element(*RegLocators.REG_PASSWORD)
+        self.pass_conf = driver.find_element(*RegLocators.REG_PASS_CONFIRM)
+        self.btn = driver.find_element(*RegLocators.REG_REGISTER)
+
+    def enter_firstname(self, value):
+        self.first_name.send_keys(value)
+
+    def enter_lastname(self, value):
+        self.last_name.send_keys(value)
+
+    def enter_email(self, value):
+        self.email.send_keys(value)
+
+    def enter_password(self, value):
+        self.password.send_keys(value)
+
+    def enter_pass_conf(self, value):
+        self.pass_conf.send_keys(value)
+
+    def btn_click(self):
+        self.btn.click()
+
+
+class AuthPage(BasePage):
+    def __init__(self, driver, timeout=10):
+        super().__init__(driver, timeout)
+        url = os.getenv('MAIN_URL') or 'https://b2c.passport.rt.ru'
+        driver.get(url)
+        self.username = driver.find_element(*AuthLocators.AUTH_USERNAME)
+        self.password = driver.find_element(*AuthLocators.AUTH_PASS)
+        self.btn = driver.find_element(*AuthLocators.AUTH_BTN)
+        self.reg_in = driver.find_element(*AuthLocators.AUTH_REG_IN)
+        self.active_tab = driver.find_element(*AuthLocators.AUTH_ACTIVE_TAB)
+
+    def enter_username(self, value):
+        self.username.send_keys(value)
+
+    def enter_password(self, value):
+        self.password.send_keys(value)
+
+    def btn_click_enter(self):
+        self.btn.click()
+        time.sleep(10)
+
+    def enter_reg_page(self):
+        self.reg_in.click()
+        time.sleep(10)
+
+    def active_tab(self):
+        self.active_tab()
+
+    def check_color(self, elem):
+        rgba = elem.value_of_css_property('color')
+        r, g, b, alpha = ast.literal_eval(rgba.strip('rgba'))
+        hex_value = '#%02x%02x%02x' % (r, g, b)
+        return hex_value
+
+
+class NewPassPage(BasePage):
+    def __init__(self, driver, timeout=10):
+        super().__init__(driver, timeout)
+        url = 'https://b2c.passport.rt.ru/auth/realms/b2c/login-actions/reset-credentials'
+        driver.get(url)
+        self.username = driver.find_element(*NewPassLocators.NEWPASS_ADDRESS)
+        self.btn = driver.find_element(*NewPassLocators.NEWPASS_BTN_CONTINUE)
+
+    def enter_username(self, value):
+        self.username.send_keys(value)
+
+    def btn_click_continue(self):
+        self.btn.click()
+        time.sleep(10)
+        
+        
+        
+        
+        
+from pages.config import MAIN_URL
+from urllib.parse import urlparse
+from selenium.webdriver.support.wait import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+
+
+class BasePage:
+    def __init__(self, driver, timeout=10):
+        self.driver = driver
+        self.base_url = MAIN_URL
+        self.driver.implicitly_wait(timeout)
+
+    def go_to_site(self):
+        return self.driver.get(self.base_url)
+
+    def find_element(self, locator, time=10):
+        return WebDriverWait(self.driver, time).until(EC.presence_of_element_located(locator),
+                                                      message=f'Not find {locator}')
+
+    def find_many_elements(self, locator, time=10):
+        return WebDriverWait(self.driver, time).until(EC.presence_of_all_elements_located(locator),
+                                                      message=f'Not find {locator}')
+
+    def get_relative_link(self):
+        url = urlparse(self.driver.current_url)
+        return url.path
+
+    def find_element_until_to_be_clickable(self, locator, time=10):
+        return WebDriverWait(self.driver, time).until(EC.element_to_be_clickable(locator),
+                                                      message=f'Element not clickable!')
+                                                      
+                                                      
+                                                      
+                                                      
+                                                      
+"""Исходные конфигурации"""
+
+# Основной URL тестируемого сайта
+MAIN_URL = 'https://b2c.passport.rt.ru'
+
+
+
+
+
+from selenium.webdriver.common.by import By
+
+
+class AuthLocators:
+    """Локаторы страницы авторизации"""
+    AUTH_USERNAME = (By.ID, 'username')
+    AUTH_PASS = (By.ID, 'password')
+    AUTH_BTN = (By.ID, 'kc-login')
+    AUTH_FORM_ERROR = (By.XPATH, "//span[@id='form-error-message']")
+    AUTH_MESS_ERROR = (By.CSS_SELECTOR, '.rt-input-container__meta--error')
+    AUTH_REG_IN = (By.XPATH, "//a[@id='kc-register']")
+    AUTH_REG_IN_TEMP_CODE = (By.ID, 'back_to_otp_btn')
+    AUTH_ACTIVE_TAB = (By.CSS_SELECTOR, '.rt-tab.rt-tab--small.rt-tab--active')
+    AUTH_FORGOT_PASSWORD = (By.ID, 'forgot_password')
+
+
+class RegLocators:
+    """Локаторы страницы регистрации"""
+    REG_FIRSTNAME = (By.XPATH, "//input[@name='firstName']")
+    REG_LASTNAME = (By.XPATH, "//input[@name='lastName']")
+    REG_REGION = (By.XPATH, "//input[@autocomplete='new-password']"[0])
+    REG_ADDRESS = (By.ID, 'address')
+    REG_PASSWORD = (By.ID, 'password')
+    REG_PASS_CONFIRM = (By.XPATH, "//input[@id='password-confirm']")
+    REG_REGISTER = (By.XPATH, "//button[@name='register']")
+    REG_CARD_MODAL = (By.XPATH, "//h2[@class='card-modal__title']")
+
+
+class NewPassLocators:
+    """Локаторы страницы восстановления пароля"""
+    NEWPASS_ADDRESS = (By.ID, 'username')
+    NEWPASS_BTN_CONTINUE = (By.ID, 'reset')
+    NEWPASS_ONETIME_CODE = (By.XPATH, '//input[@inputmode="numeric"]')
+    NEWPASS_NEW_PASS = (By.ID, 'password-new')
+    NEWPASS_NEW_PASS_CONFIRM = (By.ID, 'password-confirm')
+    NEWPASS_BTN_SAVE = (By.XPATH, '//button[@id="t-btn-reset-pass"]')
+    
+    
+    
+    
+    
+"""Действующие данные для авторизации в системе"""
+import os
+from dotenv import load_dotenv
+from faker import Faker
+import string
+load_dotenv()
+
+
+"""Фейковые данные для авторизации в системе"""
+fake_ru = Faker('ru_RU')
+fake_firstname = fake_ru.first_name()
+fake_lastname = fake_ru.last_name()
+fake_phone = fake_ru.phone_number()
+fake = Faker()
+fake_password = fake.password()
+fake_login = fake.user_name()
+fake_email = fake.email()
+
+
+valid_phone = os.getenv('phone')
+valid_login = os.getenv('login')
+valid_password = os.getenv('password')
+invalid_ls = '352010007897'
+
+valid_email = 'vvyzxe5jid@wuuvo.com'
+valid_pass_reg = 'XqwZPIEA(4'
+
+
+def generate_string_rus(n):
+    return 'б' * n
+
+
+def generate_string_en(n):
+    return 'x' * n
+
+
+def english_chars():
+    return 'qwertyuiopasdfghjklzxcvbnm'
+
+
+def russian_chars():
+    return 'абвгдеёжзиклмнопрстуфхцчшщъыьэюя'
+
+
+def chinese_chars():    # 20 популярных китайских иероглифов
+    return '的一是不了人我在有他这为之大来以个中上们'
+
+
+def special_chars():
+    return f'{string.punctuation}'
+    
+    
+    
+    
+    
+    
+    
+[pytest]
+markers =
+    auth: тесты авторизации
+    reg: тесты регистрации
+    positive: тесты с позитивным сценарием
+    negative: тесты с негативным сценарием
+    
+    
+    
+    
+    
+    
+requests
+python-dotenv
+pytest
+selenium
+faker
+
+
+
+
+
+
+import ast
+import pickle
+import time
+import pytest
+from pages.auth import *
+from pages.settings import *
+
+
+@pytest.mark.auth
+@pytest.mark.negative
+@pytest.mark.parametrize('username', [fake_phone, fake_login, invalid_ls],
+                         ids=['fake phone', 'fake login', 'fake service account'])
+def test_auth_page_fake_phone_login_serv_account(browser, username):
+    """ Проверка авторизации по номеру телефона и паролю, лицевому счету,
+    неверный номер/логин/лицевой счет."""
+    page = AuthPage(browser)
+    page.enter_username(username)
+    page.enter_password(valid_password)
+    page.btn_click_enter()
+    browser.implicitly_wait(10)
+
+    error_mess = browser.find_element(*AuthLocators.AUTH_FORM_ERROR)
+    forgot_pass = browser.find_element(*AuthLocators.AUTH_FORGOT_PASSWORD)
+
+    assert error_mess.text == 'Неверный логин или пароль' and \
+           page.check_color(forgot_pass) == '#ff4f12'
+
+
+@pytest.mark.auth
+@pytest.mark.negative
+def test_auth_page_fake_email(browser):
+    """Проверка авторизации по почте и паролю, неверная почта"""
+    page = AuthPage(browser)
+    page.enter_username(fake_email)
+    page.enter_password(valid_pass_reg)
+    time.sleep(20)     # время на ввод капчи при ее появлении
+    page.btn_click_enter()
+    browser.implicitly_wait(10)
+
+    error_mess = browser.find_element(*AuthLocators.AUTH_FORM_ERROR)
+    forgot_pass = browser.find_element(*AuthLocators.AUTH_FORGOT_PASSWORD)
+
+    assert error_mess.text == 'Неверный логин или пароль' and \
+           page.check_color(forgot_pass) == '#ff4f12'
+
+
+@pytest.mark.auth
+@pytest.mark.negative
+@pytest.mark.parametrize('username', [valid_phone, valid_email, valid_login],
+                         ids=['valid phone', 'valid login', 'valid email'])
+def test_auth_page_fake_password(browser, username):
+    """Проверка авторизации по номеру телефона/почте/логину и паролю. Неверный пароль.
+    Тест по ЛС и паролю не проводился из-за отсутствия реальных тестовых данных"""
+    page = AuthPage(browser)
+    page.enter_username(username)
+    page.enter_password(fake_password)
+    page.btn_click_enter()
+    browser.implicitly_wait(10)
+
+    error_mess = browser.find_element(*AuthLocators.AUTH_FORM_ERROR)
+    forgot_pass = browser.find_element(*AuthLocators.AUTH_FORGOT_PASSWORD)
+
+    assert error_mess.text == 'Неверный логин или пароль' and \
+           page.check_color(forgot_pass) == '#ff4f12'
+
+
+@pytest.mark.auth
+@pytest.mark.negative
+def test_auth_page_phone_empty_username(browser):
+    """ Проверка авторизации по номеру телефона/почте/логину/лицевому счету - пустой строке и паролю"""
+    page = AuthPage(browser)
+    page.enter_username('')
+    page.enter_password(valid_password)
+    page.btn_click_enter()
+    browser.implicitly_wait(10)
+
+    error_mess = browser.find_element(*AuthLocators.AUTH_MESS_ERROR)
+    assert error_mess.text == 'Введите номер телефона' or \
+           error_mess.text == 'Введите адрес, указанный при регистрации' or \
+           error_mess.text == 'Введите логин, указанный при регистрации' or \
+           error_mess.text == 'Введите номер вашего лицевого счета'
+
+
+@pytest.mark.auth
+@pytest.mark.negative
+@pytest.mark.parametrize('username', [1, 111111111],
+                         ids=['one digit', '9 digits'])
+def test_auth_page_invalid_username(browser, username):
+    """Проверка авторизации по номеру телефона и паролю, неверный формат телефона"""
+    page = AuthPage(browser)
+    page.enter_username(username)
+    page.enter_password(valid_password)
+    page.btn_click_enter()
+    browser.implicitly_wait(10)
+
+    error_mess = browser.find_element(*AuthLocators.AUTH_MESS_ERROR)
+    assert error_mess.text == 'Неверный формат телефона'
+    
+    
+    
+    
+from pages.Api_RegMail import RegEmail
+from pages.auth import *
+from selenium.webdriver.common.by import By
+from pages.settings import *
+import time
+import pytest
+
+
+@pytest.mark.reg
+@pytest.mark.negatvie
+@pytest.mark.parametrize('firstname', ['', generate_string_rus(1), generate_string_rus(31),
+                                       generate_string_rus(256), english_chars(), chinese_chars(),
+                                       special_chars(), 11111],
+                         ids=['empty', 'one char', '31 chars', '256 chars', 'english', 'chinese',
+                              'special', 'number'])
+def test_get_registration_invalid_format_firstname(browser, firstname):
+    """Негативные сценарии регистрации на сайте, невалидный формат имени"""
+
+    # Нажимаем на кнопку Зарегистрироваться:
+    page = AuthPage(browser)
+    page.enter_reg_page()
+    browser.implicitly_wait(2)
+    assert page.get_relative_link() == '/auth/realms/b2c/login-actions/registration'
+
+    page = RegPage(browser)
+    # Вводим имя:
+    page.enter_firstname(firstname)
+    browser.implicitly_wait(5)
+    # Вводим фамилию:
+    page.enter_lastname(fake_lastname)
+    browser.implicitly_wait(5)
+    # Вводим адрес почты/Email:
+    page.enter_email(fake_email)
+    browser.implicitly_wait(3)
+    # Вводим пароль:
+    page.enter_password(fake_password)
+    browser.implicitly_wait(3)
+    # Вводим подтверждение пароля:
+    page.enter_pass_conf(fake_password)
+    browser.implicitly_wait(3)
+    # Нажимаем на кнопку 'Зарегистрироваться':
+    page.btn_click()
+
+    error_mess = browser.find_element(*AuthLocators.AUTH_MESS_ERROR)
+
+    assert error_mess.text == 'Необходимо заполнить поле кириллицей. От 2 до 30 символов.'
+
+
+@pytest.mark.reg
+@pytest.mark.negatvie
+@pytest.mark.parametrize('lastname', ['', generate_string_rus(1), generate_string_rus(31),
+                                      generate_string_rus(256), english_chars(), chinese_chars(),
+                                      special_chars(), 11111],
+                         ids=['empty', 'one char', '31 chars', '256 chars', 'english', 'chinese',
+                              'special', 'number'])
+def test_get_registration_invalid_format_lastname(browser, lastname):
+    """Негативные сценарии регистрации на сайте, невалидный формат фамилии"""
+
+    # Нажимаем на кнопку Зарегистрироваться:
+    page = AuthPage(browser)
+    page.enter_reg_page()
+    browser.implicitly_wait(2)
+    assert page.get_relative_link() == '/auth/realms/b2c/login-actions/registration'
+
+    page = RegPage(browser)
+    # Вводим имя:
+    page.enter_firstname(fake_firstname)
+    browser.implicitly_wait(5)
+    # Вводим фамилию:
+    page.enter_lastname(lastname)
+    browser.implicitly_wait(5)
+    # Вводим адрес почты/Email:
+    page.enter_email(fake_email)
+    browser.implicitly_wait(3)
+    # Вводим пароль:
+    page.enter_password(fake_password)
+    browser.implicitly_wait(3)
+    # Вводим подтверждение пароля:
+    page.enter_pass_conf(fake_password)
+    browser.implicitly_wait(3)
+    # Нажимаем на кнопку 'Зарегистрироваться':
+    page.btn_click()
+
+    error_mess = browser.find_element(*AuthLocators.AUTH_MESS_ERROR)
+    assert error_mess.text == 'Необходимо заполнить поле кириллицей. От 2 до 30 символов.'
+
+
+@pytest.mark.reg
+@pytest.mark.negatvie
+@pytest.mark.parametrize('phone', ['', 1, 7111111111, generate_string_rus(11), special_chars()],
+                         ids=['empty', 'one digit', 'no 1 digit', 'string', 'specials'])
+def test_get_registration_invalid_format_phone(browser, phone):
+    """Негативные сценарии регистрации на сайте, невалидный формат номера телефона"""
+
+    # Нажимаем на кнопку Зарегистрироваться:
+    page = AuthPage(browser)
+    page.enter_reg_page()
+    browser.implicitly_wait(2)
+    assert page.get_relative_link() == '/auth/realms/b2c/login-actions/registration'
+
+    page = RegPage(browser)
+    # Вводим имя:
+    page.enter_firstname(fake_firstname)
+    browser.implicitly_wait(5)
+    # Вводим фамилию:
+    page.enter_lastname(fake_lastname)
+    browser.implicitly_wait(5)
+    # Вводим адрес почты/Email:
+    page.enter_email(phone)
+    browser.implicitly_wait(3)
+    # Вводим пароль:
+    page.enter_password(fake_password)
+    browser.implicitly_wait(3)
+    # Вводим подтверждение пароля:
+    page.enter_pass_conf(fake_password)
+    browser.implicitly_wait(3)
+    # Нажимаем на кнопку 'Зарегистрироваться':
+    page.btn_click()
+
+    error_mess = browser.find_element(*AuthLocators.AUTH_MESS_ERROR)
+    assert error_mess.text == 'Введите телефон в формате +7ХХХХХХХХХХ или +375XXXXXXXXX, ' \
+                              'или email в формате example@email.ru'
+
+
+@pytest.mark.reg
+@pytest.mark.negatvie
+@pytest.mark.parametrize('email', ['', '@', '@.', '.', generate_string_rus(20), f'{russian_chars()}@mail.ru',
+                                   f'{chinese_chars()}@mail.ru', 11111],
+                         ids=['empty', 'at', 'at point', 'point', 'string', 'russian',
+                              'chinese', 'numbers'])
+def test_get_registration_invalid_format_email(browser, email):
+    """Негативные сценарии регистрации на сайте, невалидный формат почты"""
+    # Нажимаем на кнопку Зарегистрироваться:
+    page = AuthPage(browser)
+    page.enter_reg_page()
+    browser.implicitly_wait(2)
+    assert page.get_relative_link() == '/auth/realms/b2c/login-actions/registration'
+
+    page = RegPage(browser)
+    # Вводим имя:
+    page.enter_firstname(fake_firstname)
+    browser.implicitly_wait(5)
+    # Вводим фамилию:
+    page.enter_lastname(fake_lastname)
+    browser.implicitly_wait(5)
+    # Вводим адрес почты/Email:
+    page.enter_email(email)
+    browser.implicitly_wait(3)
+    # Вводим пароль:
+    page.enter_password(fake_password)
+    browser.implicitly_wait(3)
+    # Вводим подтверждение пароля:
+    page.enter_pass_conf(fake_password)
+    browser.implicitly_wait(3)
+    # Нажимаем на кнопку 'Зарегистрироваться':
+    page.btn_click()
+
+    error_mess = browser.find_element(*AuthLocators.AUTH_MESS_ERROR)
+    assert error_mess.text == 'Введите телефон в формате +7ХХХХХХХХХХ или +375XXXXXXXXX, ' \
+                              'или email в формате example@email.ru'
+
+
+@pytest.mark.reg
+@pytest.mark.negatvie
+@pytest.mark.parametrize('address', [valid_phone, valid_email],
+                         ids=['living phone', 'living email'])
+def test_get_registration_living_account(browser, address):
+    """Негативные сценарии регистрации на сайте, проверка на существование эккаунта по номеру тел/почте"""
+
+    # Нажимаем на кнопку Зарегистрироваться:
+    page = AuthPage(browser)
+    page.enter_reg_page()
+    browser.implicitly_wait(2)
+    assert page.get_relative_link() == '/auth/realms/b2c/login-actions/registration'
+
+    page = RegPage(browser)
+    # Вводим имя:
+    page.enter_firstname(fake_firstname)
+    browser.implicitly_wait(5)
+    # Вводим фамилию:
+    page.enter_lastname(fake_lastname)
+    browser.implicitly_wait(5)
+    # Вводим адрес почты/Email:
+    page.enter_email(address)
+    browser.implicitly_wait(3)
+    # Вводим пароль:
+    page.enter_password(fake_password)
+    browser.implicitly_wait(3)
+    # Вводим подтверждение пароля:
+    page.enter_pass_conf(fake_password)
+    browser.implicitly_wait(3)
+    # Нажимаем на кнопку 'Зарегистрироваться':
+    page.btn_click()
+
+    card_modal_title = browser.find_element(*RegLocators.REG_CARD_MODAL)
+
+    assert card_modal_title.text == 'Учётная запись уже существует'
+
+
+@pytest.mark.reg
+@pytest.mark.negatvie
+def test_get_registration_diff_pass_and_pass_conf(browser):
+    """Негативные сценарии регистрации на сайте, проверка на совпадение паролей в
+    полях ввода 'Пароль' и 'Подтверждение пароля'."""
+
+    page = AuthPage(browser)
+    page.enter_reg_page()
+    browser.implicitly_wait(2)
+    assert page.get_relative_link() == '/auth/realms/b2c/login-actions/registration'
+
+    page = RegPage(browser)
+    # Вводим имя:
+    page.enter_firstname(fake_firstname)
+    browser.implicitly_wait(5)
+    # Вводим фамилию:
+    page.enter_lastname(fake_lastname)
+    browser.implicitly_wait(5)
+    # Вводим адрес почты/Email:
+    page.enter_email(fake_email)
+    browser.implicitly_wait(3)
+    # Вводим пароль:
+    page.enter_password(fake_password)
+    browser.implicitly_wait(3)
+    # Вводим подтверждение пароля:
+    page.enter_pass_conf(valid_pass_reg)
+    browser.implicitly_wait(3)
+    # Нажимаем на кнопку 'Зарегистрироваться':
+    page.btn_click()
+
+    error_mess = browser.find_element(*AuthLocators.AUTH_MESS_ERROR)
+    assert error_mess.text == 'Пароли не совпадают'
+    
+    
+    
+    
+    
+    
+from pages.Api_RegMail import RegEmail
+from pages.auth import *
+from selenium.webdriver.common.by import By
+from pages.settings import *
+import time
+import pytest
+from selenium.webdriver.common.keys import Keys
+
+
+@pytest.mark.newpass
+@pytest.mark.negative
+def test_forgot_password_page(browser):
+    """Проверка восстановления пароля по почте - негативные сценарии.
+    В самом начале процесса тестирования требуется ОДНОРАЗОВЫЙ РУЧНОЙ ВВОД КАПЧИ !!!
+    Далее уже внутри этого теста рассматриваются 8 различных сценариев (тестов)"""
+    # Разделяем email на имя и домен для использования в следующих запросах:
+    sign_at = valid_email.find('@')
+    mail_name = valid_email[0:sign_at]
+    mail_domain = valid_email[sign_at + 1:len(valid_email)]
+
+    page = NewPassPage(browser)
+    page.enter_username(valid_email)
+    time.sleep(20)     # время на ввод капчи
+    page.btn_click_continue()
+
+    time.sleep(30)  # подождём, пока на почту придёт письмо...
+
+    """Проверяем почтовый ящик на наличие писем и достаём ID последнего письма"""
+    result_id, status_id = RegEmail().get_id_letter(mail_name, mail_domain)
+    # Получаем id письма с кодом из почтового ящика:
+    id_letter = result_id[0].get('id')
+    # Сверяем полученные данные с нашими ожиданиями
+    assert status_id == 200, "status_id error"
+    assert id_letter > 0, "id_letter > 0 error"
+
+    """Получаем код регистрации из письма от Ростелекома"""
+    result_code, status_code = RegEmail().get_reg_code(mail_name, mail_domain, str(id_letter))
+
+    # Получаем body из текста письма:
+    text_body = result_code.get('body')
+    # Извлекаем код из текста методом find:
+    reg_code = text_body[text_body.find('Ваш код: ') + len('Ваш код: '):
+                         text_body.find('Ваш код: ') + len('Ваш код: ') + 6]
+    # Сверяем полученные данные с нашими ожиданиями
+    assert status_code == 200, "status_code error"
+    assert reg_code != '', "reg_code != [] error"
+
+    reg_digit = [int(char) for char in reg_code]
+    print(reg_digit)
+    browser.implicitly_wait(30)
+    for i in range(0, 6):
+        browser.find_elements(*NewPassLocators.NEWPASS_ONETIME_CODE)[i].send_keys(reg_code[i])
+        browser.implicitly_wait(5)
+    time.sleep(10)
+
+    elem_new_pass = browser.find_element(*NewPassLocators.NEWPASS_NEW_PASS)
+    elem_conf_pass = browser.find_element(*NewPassLocators.NEWPASS_NEW_PASS_CONFIRM)
+
+    def input_new_pass(new_pass):
+        # browser.find_element(*NewPassLocators.NEWPASS_NEW_PASS).clear()   # почему-то не работает!!!
+        elem_new_pass.send_keys(Keys.COMMAND, 'a')
+        elem_new_pass.send_keys(Keys.DELETE)
+        elem_new_pass.send_keys(new_pass)
+        time.sleep(3)
+        # browser.find_element(*NewPassLocators.NEWPASS_NEW_PASS_CONFIRM).clear()
+        elem_conf_pass.send_keys(Keys.COMMAND, 'a')
+        elem_conf_pass.send_keys(Keys.DELETE)
+        elem_conf_pass.send_keys(new_pass)
+        time.sleep(3)
+
+    """1. Новый пароль - менее 8 символов"""
+    new_pass = valid_pass_reg[0:7]
+    input_new_pass(new_pass)
+
+    error_mess = browser.find_element(*AuthLocators.AUTH_MESS_ERROR)
+    assert error_mess.text == 'Длина пароля должна быть не менее 8 символов'
+
+    """2. Новый пароль - более 20 символов"""
+    new_pass = valid_pass_reg[0:7]*3
+    input_new_pass(new_pass)
+
+    error_mess = browser.find_element(*AuthLocators.AUTH_MESS_ERROR)
+    assert error_mess.text == 'Длина пароля должна быть не более 20 символов'
+
+    """3. Новый пароль - пароль не содержит заглавные буквы"""
+    new_pass = valid_pass_reg.lower()
+    input_new_pass(new_pass)
+
+    error_mess = browser.find_element(*AuthLocators.AUTH_MESS_ERROR)
+    assert error_mess.text == 'Пароль должен содержать хотя бы одну заглавную букву'
+
+    """4. Новый пароль - пароль не содержит строчные буквы"""
+    new_pass = valid_pass_reg.upper()
+    input_new_pass(new_pass)
+
+    error_mess = browser.find_element(*AuthLocators.AUTH_MESS_ERROR)
+    assert error_mess.text == 'Пароль должен содержать хотя бы одну прописную букву'
+
+    """5. Новый пароль - пароль включает в себя русскую букву"""
+    new_pass = f'{valid_pass_reg}{generate_string_rus(1)}'
+    input_new_pass(new_pass)
+
+    error_mess = browser.find_element(*AuthLocators.AUTH_MESS_ERROR)
+    assert error_mess.text == 'Пароль должен содержать только латинские буквы'
+
+    """6. Новый пароль - пароль не содержит ни одной цифры или спецсимвола"""
+    new_pass = valid_pass_reg
+    for i in new_pass:
+        if i.isdigit() or i in special_chars():
+            new_pass = new_pass.replace(i, 'x')
+    input_new_pass(new_pass)
+
+    error_mess = browser.find_element(*AuthLocators.AUTH_MESS_ERROR)
+    assert error_mess.text == 'Пароль должен содержать хотя бы 1 спецсимвол или хотя бы одну цифру'
+
+    """7. Новый пароль отличается от пароля в поле 'Подтверждение пароля'."""
+    elem_new_pass.send_keys(Keys.COMMAND, 'a')
+    elem_new_pass.send_keys(Keys.DELETE)
+    new_pass = f'{valid_pass_reg[0:8]}{generate_string_en(2)}'
+    elem_new_pass.send_keys(new_pass)
+    time.sleep(3)
+
+    elem_conf_pass.send_keys(Keys.COMMAND, 'a')
+    elem_conf_pass.send_keys(Keys.DELETE)
+    new_conf_pass = f'{valid_pass_reg[0:8]}{generate_string_en(4)}'
+    elem_conf_pass.send_keys(new_conf_pass)
+    time.sleep(3)
+
+    browser.find_element(*NewPassLocators.NEWPASS_BTN_SAVE).click()
+
+    error_mess = browser.find_element(*AuthLocators.AUTH_MESS_ERROR)
+    assert error_mess.text == 'Пароли не совпадают'
+
+    """8. Новый пароль - идентичен предыдущему"""
+    new_pass = valid_pass_reg
+    input_new_pass(new_pass)
+    browser.find_element(*NewPassLocators.NEWPASS_BTN_SAVE).click()
+
+    error_mess = browser.find_element(*AuthLocators.AUTH_FORM_ERROR)
+    assert error_mess.text == 'Этот пароль уже использовался, укажите другой пароль'
+    
+    
+    
+    
+    
+    
+import pickle
+import time
+import pytest
+from pages.auth import *
+from selenium.webdriver.common.by import By
+from pages.settings import valid_phone, valid_login, valid_password, \
+    invalid_ls, valid_email, valid_pass_reg, fake_email
+
+
+@pytest.mark.auth
+@pytest.mark.positive
+@pytest.mark.xfail
+@pytest.mark.parametrize('username', [valid_phone, valid_email, valid_login, invalid_ls],
+                         ids=['phone', 'email', 'login', 'ls'])
+def test_active_tab(browser, username):
+    """Проверка автоматического переключения табов тел/почта/логин/лицевой счет
+    invalid_ls - реальный номер лс (моего личного), ранее действующего, в наст момент закрыт, но
+    формат правильный, при ручном переключении таба на лс принимается системой в качестве ЛС, в
+    автоматическом режиме переключения не происходит, воспринимается как номер телефона, откидывая
+    последнюю пару якобы лишних цифр!"""
+    page = AuthPage(browser)
+    page.enter_username(username)
+    page.enter_password(valid_password)
+    if username == valid_phone:
+        assert browser.find_element(*AuthLocators.AUTH_ACTIVE_TAB).text == 'Телефон'
+    elif username == valid_email:
+        assert browser.find_element(*AuthLocators.AUTH_ACTIVE_TAB).text == 'Почта'
+    elif username == valid_login:
+        assert browser.find_element(*AuthLocators.AUTH_ACTIVE_TAB).text == 'Логин'
+    else:
+        assert browser.find_element(*AuthLocators.AUTH_ACTIVE_TAB).text == 'Лицевой счет'
+
+
+@pytest.mark.auth
+@pytest.mark.positive
+@pytest.mark.parametrize('username', [valid_phone, valid_login],
+                         ids=['valid phone', 'valid login'])
+def test_auth_page_phone_login_valid(browser, username):
+    """Проверка авторизации по номеру телефона/логину и паролю + проверка
+    автоматического переключения табов тел/логин"""
+    page = AuthPage(browser)
+    page.enter_username(username)
+    page.enter_password(valid_password)
+    page.btn_click_enter()
+
+    assert page.get_relative_link() == '/account_b2c/page'
+
+
+@pytest.mark.auth
+@pytest.mark.positive
+def test_auth_page_email_valid(browser):
+    """Проверка авторизации по почте и паролю"""
+    page = AuthPage(browser)
+    page.enter_username(valid_email)
+    page.enter_password(valid_pass_reg)
+    time.sleep(20)     # на случай появления Captcha, необходимости ее ввода вручную
+    page.btn_click_enter()
+    page.driver.save_screenshot('auth_by_email.png')
+
+    with open('my_cookies.txt', 'wb') as cookies:
+        pickle.dump(browser.get_cookies(), cookies)
+
+    assert page.get_relative_link() == '/account_b2c/page'
+
+
+@pytest.mark.reg
+@pytest.mark.positive
+def test_reg_page_open(browser):
+    """ Проверка страницы регистрации - дымовое тестирование """
+    page = AuthPage(browser)
+    page.enter_reg_page()
+
+    assert page.get_relative_link() == '/auth/realms/b2c/login-actions/registration'
+    
+    
+    
+    
+    
+    
+    
+from pages.Api_RegMail import RegEmail
+from pages.auth import *
+from selenium.webdriver.common.by import By
+from pages.settings import *
+import time
+import pytest
+
+
+@pytest.mark.newpass
+@pytest.mark.positive
+def test_forgot_password_page(browser):
+    """Проверка восстановления пароля по почте.
+    В начале теста требуется ОДНОРАЗОВЫЙ РУЧНОЙ ВВОД КАПЧИ !!!"""
+    # Разделяем email на имя и домен для использования в следующих запросах:
+    sign_at = valid_email.find('@')
+    mail_name = valid_email[0:sign_at]
+    mail_domain = valid_email[sign_at + 1:len(valid_email)]
+
+    page = NewPassPage(browser)
+    page.enter_username(valid_email)
+    time.sleep(20)     # время на ввод символов с картинки
+    page.btn_click_continue()
+
+    time.sleep(30)  # подождём, пока на почту придёт письмо...
+
+    """Проверяем почтовый ящик на наличие писем и достаём ID последнего письма"""
+    result_id, status_id = RegEmail().get_id_letter(mail_name, mail_domain)
+    # Получаем id письма с кодом из почтового ящика:
+    id_letter = result_id[0].get('id')
+    # Сверяем полученные данные с нашими ожиданиями
+    assert status_id == 200, "status_id error"
+    assert id_letter > 0, "id_letter > 0 error"
+
+    """Получаем код регистрации из письма от Ростелекома"""
+    result_code, status_code = RegEmail().get_reg_code(mail_name, mail_domain, str(id_letter))
+
+    # Получаем body из текста письма:
+    text_body = result_code.get('body')
+    # Извлекаем код из текста методом find:
+    reg_code = text_body[text_body.find('Ваш код: ') + len('Ваш код: '):
+                         text_body.find('Ваш код: ') + len('Ваш код: ') + 6]
+    # Сверяем полученные данные с нашими ожиданиями
+    assert status_code == 200, "status_code error"
+    assert reg_code != '', "reg_code != [] error"
+
+    reg_digit = [int(char) for char in reg_code]
+    print(reg_digit)
+    browser.implicitly_wait(30)
+    for i in range(0, 6):
+        browser.find_elements(*NewPassLocators.NEWPASS_ONETIME_CODE)[i].send_keys(reg_code[i])
+        browser.implicitly_wait(5)
+    # browser.implicitly_wait(30)
+    time.sleep(10)
+    new_pass = fake_password
+    browser.find_element(*NewPassLocators.NEWPASS_NEW_PASS).send_keys(new_pass)
+    time.sleep(3)
+    browser.find_element(*NewPassLocators.NEWPASS_NEW_PASS_CONFIRM).send_keys(new_pass)
+    browser.find_element(*NewPassLocators.NEWPASS_BTN_SAVE).click()
+    time.sleep(60)
+    print(browser.current_url)
+
+    assert page.get_relative_link() == '/auth/realms/b2c/login-actions/required-action'
+
+    """В случае успешной смены пароля, перезаписываем его в файл settings"""
+    with open(r"../pages/settings.py", 'r', encoding='utf8') as file:
+        lines = []
+        for line in file.readlines():
+            if 'valid_pass_reg' in line:
+                lines.append(f"valid_pass_reg = '{fake_password}'\n")
+            else:
+                lines.append(line)
+    with open(r"../pages/settings.py", 'w', encoding='utf8') as file:
+        file.writelines(lines)
+        
+        
+        
+        
+        
+        
+        
+from pages.Api_RegMail import RegEmail
+from pages.auth import *
+from selenium.webdriver.common.by import By
+from pages.settings import valid_phone, valid_login, valid_password, \
+    fake_firstname, fake_lastname, fake_password
+import time
+import pytest
+
+
+class TestRegistration:
+    """Проверка регистрации на сайте"""
+    # Выносим данные в тело класса для доступа к значениям переменных из всех функций класса:
+    result_email, status_email = RegEmail().get_api_email()  # запрос на получение валидного почтового ящика
+    email_reg = result_email[0]  # из запроса получаем валидный email
+
+    @pytest.mark.reg
+    @pytest.mark.positive
+    def test_get_registration_valid(self, browser):
+        """Валидный вариант регистрации при использовании email и получения кода для входа на почту.
+         Используем виртуальный почтовый ящик '1secmail.com' и получаем данные через GET запросы.
+         Добавляем созданный email в файл settings."""
+
+        # Разделяем email на имя и домен для использования в следующих запросах:
+        sign_at = self.email_reg.find('@')
+        mail_name = self.email_reg[0:sign_at]
+        mail_domain = self.email_reg[sign_at + 1:len(self.email_reg)]
+        assert self.status_email == 200, 'status_email error'
+        assert len(self.result_email) > 0, 'len(result_email) > 0 -> error'
+
+        """Активируем окно ввода данных для прохождения регистрации на сайте"""
+        # Нажимаем на кнопку Зарегистрироваться:
+        page = AuthPage(browser)
+        page.enter_reg_page()
+        browser.implicitly_wait(2)
+        assert page.get_relative_link() == '/auth/realms/b2c/login-actions/registration'
+
+        page = RegPage(browser)
+        # Вводим имя:
+        page.enter_firstname(fake_firstname)
+        browser.implicitly_wait(5)
+        # Вводим фамилию:
+        page.enter_lastname(fake_lastname)
+        browser.implicitly_wait(5)
+        # Вводим адрес почты/Email:
+        page.enter_email(self.email_reg)
+        browser.implicitly_wait(3)
+        # Вводим пароль:
+        page.enter_password(fake_password)
+        browser.implicitly_wait(3)
+        # Вводим подтверждение пароля:
+        page.enter_pass_conf(fake_password)
+        browser.implicitly_wait(3)
+        # Нажимаем на кнопку 'Зарегистрироваться':
+        page.btn_click()
+        time.sleep(30)  # подождём, пока на почту придёт письмо...
+
+        """Проверяем почтовый ящик на наличие писем и достаём ID последнего письма"""
+        result_id, status_id = RegEmail().get_id_letter(mail_name, mail_domain)
+        # Получаем id письма с кодом из почтового ящика:
+        id_letter = result_id[0].get('id')
+        # Сверяем полученные данные с нашими ожиданиями
+        assert status_id == 200, "status_id error"
+        assert id_letter > 0, "id_letter > 0 error"
+
+        """Получаем код регистрации из письма от Ростелекома"""
+        result_code, status_code = RegEmail().get_reg_code(mail_name, mail_domain, str(id_letter))
+
+        # Получаем body из текста письма:
+        text_body = result_code.get('body')
+        # Извлекаем код из текста методом find:
+        reg_code = text_body[text_body.find('Ваш код : ') + len('Ваш код : '):
+                             text_body.find('Ваш код : ') + len('Ваш код : ') + 6]
+        # Сверяем полученные данные с нашими ожиданиями
+        assert status_code == 200, "status_code error"
+        assert reg_code != '', "reg_code != [] error"
+
+        reg_digit = [int(char) for char in reg_code]
+        browser.implicitly_wait(30)
+        for i in range(0, 6):
+            browser.find_elements(By.XPATH, '//input[@inputmode="numeric"]')[i].send_keys(reg_code[i])
+            browser.implicitly_wait(5)
+        browser.implicitly_wait(30)
+
+        """Проверяем, что регистрация пройдена и пользователь перенаправлен в личный кабинет"""
+        assert page.get_relative_link() == '/account_b2c/page', 'Регистрация НЕ пройдена'
+        page.driver.save_screenshot('reg_done.png')
+
+        """В случае успешной регистрации, перезаписываем созданные пару email/пароль в файл settings"""
+        page.driver.save_screenshot('reg_done.png')
+        print(self.email_reg, fake_password)
+        with open(r"../pages/Settings.py", 'r', encoding='utf8') as file:
+            lines = []
+            print(lines)
+            for line in file.readlines():
+                if 'valid_email' in line:
+                    lines.append(f"valid_email = '{str(self.email_reg)}'\n")
+                elif 'valid_pass_reg' in line:
+                    lines.append(f"valid_pass_reg = '{fake_password}'\n")
+                else:
+                    lines.append(line)
+        with open(r"../pages/Settings.py", 'w', encoding='utf8') as file:
+            file.writelines(lines)
